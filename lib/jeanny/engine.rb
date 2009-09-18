@@ -99,20 +99,22 @@ module Jeanny
             
         end
             
-        def replace struct
+        def replace type, struct
+            
+            fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
             
             struct.each do |struct_item|
                 file_list = get_file_list struct_item[:in]
-                file_list.delete_if do |file_name|
+                file_list.delete_if do |path|
                     
                     delete = false
                     
                     struct_item[:ex].each do |exclude_rule|
                         
                         if exclude_rule.kind_of? Regexp
-                            delete = File.basename(file_name) =~ exclude_rule
+                            delete = File.basename(path) =~ exclude_rule
                         else
-                            delete = File.basename(file_name).include?(exclude_rule)
+                            delete = File.basename(path).include?(exclude_rule)
                         end
                         
                         break if delete
@@ -121,7 +123,24 @@ module Jeanny
                     delete
                     
                 end
-                p file_list
+                
+                file_list.each do |path|
+                    
+                    data = File.open_file(path)
+                    
+                    code = case type
+                        when :js then JSCode
+                        when :css then CSSCode
+                        when :html then HTMLCode
+                    end
+                    
+                    code = code.new data
+                    data = code.replace @classes
+                    
+                    # File.save(path, data, prefix)
+                    
+                end
+                
             end
             
         end
@@ -200,6 +219,45 @@ module Jeanny
             css
         end
 
+    end
+    
+    class Code
+        
+        attr_reader :code
+        
+        def initialize code
+            @code = code
+        end
+        
+        def replace classes
+            
+        end
+        
+    end
+    
+    class JSCode < Code
+        
+        def replace classes
+            puts 'replace in js code'
+        end
+        
+    end
+    
+    class CSSCode < Code
+        
+        def replace classes
+            puts 'replace in css code'
+        end
+        
+    end
+    
+    class HTMLCode < Code
+        
+        def replace classes
+            puts 'replace in html code'
+            p @code.scan(/class\s*=\s*"(.*?)"/)
+        end
+        
     end
 
 end

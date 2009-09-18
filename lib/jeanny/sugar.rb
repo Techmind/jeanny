@@ -78,7 +78,6 @@ module Jeanny
                     fail "We can`t process here..." unless @canbe[:process]
                     fail "Блоки process не должны быть рекурсивными" if @process_block_start
                     fail "Не передан блок" unless block_given?
-                    fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
                     
                     @canbe[:process] = false
                     @canbe[:replace] = true
@@ -100,8 +99,7 @@ module Jeanny
                 
                 begin
                     unless @process_block.empty?
-                        p @process_block
-                        # @engine.replace(@process_block)
+                        @engine.replace type, @process_block
                     end
                 rescue RuntimeError => e
                     $stderr.puts "Ошибка: ".red + e.message
