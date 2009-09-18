@@ -10,14 +10,16 @@ module Jeanny
             include Singleton
 
             def initialize
-                refresh
+                # refresh
             end
 
             def analyze(path, args = {})
+                
+                refresh
 
                 begin
                     if @engine.analyze(path)
-                        @canbe[:save], @canbe[:process] = true
+                        @canbe[:save], @canbe[:process] = true, true
                         @canbe[:analyze] = false
                     end                
                 rescue ArgumentError, RuntimeError, Errno::ENOENT => e
@@ -62,11 +64,65 @@ module Jeanny
             end
 
             def save file = ''
-                puts "Saving file to: #{file}"
+                # @engine.save file
             end
 
             def save_to file
                 save file
+            end
+            
+            def group type, args = {}, &block
+   
+                begin
+                    
+                    fail "We can`t process here..." unless @canbe[:process]
+                    fail "Блоки process не должны быть рекурсивными" if @process_block_start
+                    fail "Не передан блок" unless block_given?
+                    fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
+                    
+                    @canbe[:process] = false
+                    @canbe[:replace] = true
+
+                    @process_block_start = true
+                    @process_block = []
+
+                    yield block
+                    
+                    @process_block_start = false
+
+                    @canbe[:replace] = false
+                    @canbe[:process] = true
+                    
+                rescue RuntimeError => e
+                    $stderr.puts "Ошибка: ".red + e.message
+                    exit 0
+                end
+                
+                begin
+                    unless @process_block.empty?
+                        p @process_block
+                        # @engine.replace(@process_block)
+                    end
+                rescue RuntimeError => e
+                    $stderr.puts "Ошибка: ".red + e.message
+                    exit 0
+                end
+                
+            end
+            
+            def replace args = { }
+                
+                fail "We can`t replace here..." unless @canbe[:replace]
+                
+                struct = { :in => [], :ex => [], :prefix => '' }
+
+                struct[:in] = ([args[:in]] | [args[:include]]).flatten.delete_if { |item| item.nil? or item.empty? }
+                struct[:ex] = ([args[:ex]] | [args[:exclude]]).flatten.delete_if { |item| item.nil? or item.empty? }
+
+                struct[:prefix] = args[:prefix] unless args[:prefix].nil?
+
+                @process_block << struct if struct[:in].length > 0
+                
             end
 
             private
@@ -84,8 +140,8 @@ module Jeanny
                 @file_list, @compare_file = '', ''
                 @canbe = { :analyze => true, :save => false, :process => false, :replace => false, :stat => false, :make => false }
 
-                # @process_block_start = false
-                # @process_block = []
+                @process_block_start = false
+                @process_block = []
                 
             end
 

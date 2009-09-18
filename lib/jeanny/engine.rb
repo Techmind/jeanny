@@ -23,7 +23,9 @@ module Jeanny
             end
             
             # Удаляем все экспрешены
-            file_meat = replace_expressions(file_meat)
+            file_meat = replace_expressions(file_meat) do |expression|
+                ''
+            end
 
             # Удаляем все что в фигурных и простых скобках
             file_meat = file_meat.gsub(/\{.*?\}/m, '{}').gsub(/\(.*?\)/, '()')
@@ -32,18 +34,18 @@ module Jeanny
             file_meat.gsub(/\.([^\.,\{\} :#\[\]\*\n\s]+)/) do |match|
             
                 # Если найденная строка соответствует маске и класс еще не был добавлен — добавляем его
-                @classes[$1] = '' if match =~ /^\.([a-z]-.+)$/ and not(classes.has_key?($1)) 
+                @classes[$1] = '' if match =~ /^\.([a-z]-.+)$/ and not(@classes.has_key?($1)) 
                 
             end
             
-            fail JeannyNoClassesFound, "похоже, что в анализируемом файле нет классов подходящих по условию" if classes.empty?
+            fail JeannyNoClassesFound, "похоже, что в анализируемом файле нет классов подходящих по условию" if @classes.empty?
             
             true
 
         end
         
         def compare_with file
-            
+                    
             fail JeannyCompareFileNotFound, "анализируемый файл не найден" unless File.exists?(File.expand_path(file))
                     
             saved_classes = { }
@@ -69,7 +71,9 @@ module Jeanny
                 @classes[class_name] = [saved_classes[class_name], 1]               # restored classes
             end
             
-            empty_classes = @classes.select { |key, val| @classes[key].epmty? }
+            short_words = generate_short_words
+
+            empty_classes = @classes.select { |key, val| val.empty? }
             
             unless empty_classes.nil? or empty_classes.empty?
                 
@@ -86,35 +90,66 @@ module Jeanny
         end
         
         def fill_short_class_names
+            
+            short_words = generate_short_word
+            
             @classes.keys.each_with_index do |key, index|
                 @classes[key] = [short_words[index], 0]                             # new classes
             end
+            
         end
             
-        def replace path
+        def replace struct
+            
+            struct.each do |struct_item|
+                file_list = get_file_list struct_item[:in]
+                file_list.delete_if do |file_name|
+                    
+                    delete = false
+                    
+                    struct_item[:ex].each do |exclude_rule|
+                        
+                        if exclude_rule.kind_of? Regexp
+                            delete = File.basename(file_name) =~ exclude_rule
+                        else
+                            delete = File.basename(file_name).include?(exclude_rule)
+                        end
+                        
+                        break if delete
+                    end
+                    
+                    delete
+                    
+                end
+                p file_list
+            end
             
         end
         
-        # private
+        def save file
+            file = File.expand_path(file)
+            data = @classes.map { |x| [x[0], x[1][0]].join(': ') }.sort_by { |x| x }.join("\n")
+            
+            File.save_file(file, data)
+        end
+        
+        private
 
         # Метод генерирует массив коротких имен.
         # По умолчанию генерируется 38471 имя. Если надо больше, добавить — легко        
-        def short_words again = false
+        def generate_short_words again = false
             
-            if @short_words.nil? or @short_words.empty? or again
-                
-                @short_words = []
-                
-                %w(a aa a0 a_ a- aaa a00 a0a aa0 aa_ a_a aa- a-a a0_ a0- a_0 a-0).each do |name|
-                    max = name.length + 1
-                    while name.length < max
-                        @short_words << name
-                        name = name.next
-                    end
+            short_words = []
+            
+            %w(a aa a0 a_ a- aaa a00 a0a aa0 aa_ a_a aa- a-a a0_ a0- a_0 a-0).each do |name|
+                max = name.length + 1
+                while name.length < max
+                    short_words << name
+                    name = name.next
                 end
             end
             
-            @short_words
+            short_words
             
         end
         
