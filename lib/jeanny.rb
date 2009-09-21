@@ -21,15 +21,15 @@ require 'jeanny/sugar'
 
 # USAGE ######################################################
 
-include Jeanny::Sugar
-
-analyze('serp/css/_temp.css', :compare_with => 'classes.saved') and save
-
-group :css, :title => 'replacing in stylesheets' do
-    replace :in => 'serp/block/*/*.css'
-end
-
-group :html, :title => 'replacing in template files' do
-    replace :in => ['serp/page/*.xsl']
-    replace :in => ['serp/block/*/*.xsl']
-end
+# include Jeanny::Sugar
+# 
+# analyze('serp/css/_temp.css', :compare_with => 'classes.saved') and save
+# 
+# group :css, :title => 'replacing in stylesheets' do
+#     replace :in => 'serp/block/*/*.css'
+# end
+# 
+# group :html, :title => 'replacing in template files' do
+#     replace :in => ['serp/page/*.xsl']
+#     replace :in => ['serp/block/*/*.xsl']
+# end
