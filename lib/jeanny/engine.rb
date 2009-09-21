@@ -137,7 +137,7 @@ module Jeanny
                     code = code.new data
                     data = code.replace @classes
                     
-                    # File.save(path, data, prefix)
+                    File.save_file(path, data)
                     
                 end
                 
@@ -246,7 +246,24 @@ module Jeanny
     class CSSCode < Code
         
         def replace classes
-            puts 'replace in css code'
+            
+            classes = classes.to_a.sort_by { |x| x[0].length }.reverse
+            
+            # Случайная строка
+            unique_string = Time.now.object_id.to_s
+
+            # Проходимся по классам
+            classes.each do |class_name|
+
+                # Заменяем старое имя класса на новое, плюс случайное число,
+                # чтобы знать что этот класс мы уже изменяли
+                @code = @code.gsub(/\.#{class_name[0]}(?=[^-\w])/, ".#{unique_string}#{class_name[1][0]}")
+            end
+
+            # После замены имен классов, случайное число уже не нужно,
+            # так что удаляем его, и возвращаем css с замененными значениями
+            @code.gsub(unique_string, '')
+            
         end
         
     end
@@ -254,8 +271,35 @@ module Jeanny
     class HTMLCode < Code
         
         def replace classes
-            puts 'replace in html code'
-            p @code.scan(/class\s*=\s*"(.*?)"/)
+            
+            # p classes
+            # Находим в файле текст, типа: class = "some text here..."
+            @code = @code.gsub(/class\s*=\s*('|")(.*?)\1/) do |match|
+
+                # берем то что в кавычках и разбиваем по пробелам
+                match = $2.split(' ')
+
+                # проходимся по получившемуся массиву
+                match.map! do |class_name|
+                    # удаляем проблелы по бокам
+                    class_name = class_name.strip
+
+                    # и если в нашем списке замены есть такой класс
+                    if classes.has_key? class_name
+                        # заменяем на новое значение
+                        classes[class_name][0]
+                    else
+                        # или оставляем как было
+                        class_name
+                    end
+                end
+                
+                "class=\"#{match.join(' ')}\""
+                
+            end
+            
+            @code
+            
         end
         
     end
