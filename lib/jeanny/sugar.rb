@@ -64,7 +64,7 @@ module Jeanny
             end
 
             def save file = ''
-                # @engine.save file
+                @engine.save file
             end
 
             def save_to file

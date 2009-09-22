@@ -21,6 +21,8 @@ module Jeanny
             file_list.each do |file|
                 file_meat = file_meat + File.open_file(file)
             end
+
+            # p file_meat
             
             # Удаляем все экспрешены
             file_meat = replace_expressions(file_meat) do |expression|
@@ -91,7 +93,7 @@ module Jeanny
         
         def fill_short_class_names
             
-            short_words = generate_short_word
+            short_words = generate_short_words
             
             @classes.keys.each_with_index do |key, index|
                 @classes[key] = [short_words[index], 0]                             # new classes
@@ -238,7 +240,25 @@ module Jeanny
     class JSCode < Code
         
         def replace classes
-            puts 'replace in js code'
+            
+            classes = classes.to_a.sort_by { |x| x[0].length }.reverse
+            
+            # Находим все строки и регулярные выражения
+            @code.gsub(/(("|'|\/)((\\\2|.)*?)\2)/m) do |string|
+
+                string_before, string_after = $3, $3
+
+                # Проходимся по всем классам
+                classes.each do |class_name|
+
+                    # И заменяем старый класс, на новый
+                    string_after = string_after.gsub(class_name[0], class_name[1][0])
+                end
+
+                string.gsub(string_before, string_after.gsub(/(\\+)("|')/, "\\1\\1\\2"))
+
+            end
+            
         end
         
     end
@@ -272,18 +292,55 @@ module Jeanny
         
         def replace classes
             
-            # p classes
-            # Находим в файле текст, типа: class = "some text here..."
-            @code = @code.gsub(/class\s*=\s*('|")(.*?)\1/) do |match|
+            # # p classes
+            # # Находим в файле текст, типа: class = "some text here..."
+            # @code = @code.gsub(/class\s*=\s*('|")(.*?)\1/) do |match|
+            # 
+            #     # берем то что в кавычках и разбиваем по пробелам
+            #     match = $2.split(' ')
+            # 
+            #     # проходимся по получившемуся массиву
+            #     match.map! do |class_name|
+            #         # удаляем проблелы по бокам
+            #         class_name = class_name.strip
+            # 
+            #         # и если в нашем списке замены есть такой класс
+            #         if classes.has_key? class_name
+            #             # заменяем на новое значение
+            #             classes[class_name][0]
+            #         else
+            #             # или оставляем как было
+            #             class_name
+            #         end
+            #     end
+            #     
+            #     "class=\"#{match.join(' ')}\""
+            #     
+            # end
+            # 
+            # @code
+            
+            # Заменяем классы во встроенных стилях
+            @code.gsub!(/<style[^>]*?>(.*?)<\s*\/\s*style\s*>/mi) do |style|
+                style.gsub($1, CSSCode.new($1).replace(classes))
+            end
 
+            # Заменяем классы во встроенных скриптах
+            @code.gsub!(/<script[^>]*?>(.*?)<\s*\/\s*script\s*>/mi) do |script|
+                script.gsub($1, JSCode.new($1).replace(classes))
+            end
+            
+            # Находим тэги у которых есть классы, типа: class = "some text here..."
+            @code.gsub!(/class\s*=\s*('|")(.*?)\1/) do |match|
+            
                 # берем то что в кавычках и разбиваем по пробелам
                 match = $2.split(' ')
-
+            
                 # проходимся по получившемуся массиву
                 match.map! do |class_name|
                     # удаляем проблелы по бокам
                     class_name = class_name.strip
-
+            
                     # и если в нашем списке замены есть такой класс
                     if classes.has_key? class_name
                         # заменяем на новое значение
@@ -298,7 +355,27 @@ module Jeanny
                 
             end
             
-            @code
+            # Находим тэги с аттрибутами в которых может быть js
+            @code.gsub!(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
+                tag.gsub($3, JSCode.new($3).replace(classes))
+            end
+
+            # # Находим тэги у которых есть классы
+            # @code.gsub!(/<[^>]*?class\s*=\s*("|')(.*?)\1[^>]*?>/i) do |tag|
+            # 
+            #     value_before, value_after = $2, ''
+            # 
+            #     # Удаляем пробелы в начале, в конце, удаляем табы и переводы 
+            #     # стоки и заменяем двойные пробелы на одинарные
+            #     value_after = value_before.to_s.gsub(/^\s+/m, '').gsub(/\s+$/m, '').gsub(/\t|\n/m, '').gsub(/ +/, ' ')
+            # 
+            #     # Разбиваем строку в массив, проходим по нему и если есть 
+            #     # такой класс, заменяем его на новый, иначе оставляем старый. Объединяем массив
+            #     value_after = value_after.split.map { |class_name| class_name = @class_hash[class_name] || class_name }.join(' ')
+            # 
+            #     # Возвращаем найденый тэг заменяя класс на новые
+            #     tag.gsub(value_before, value_after)
+            # end
             
         end
         

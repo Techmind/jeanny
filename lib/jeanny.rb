@@ -22,14 +22,27 @@ require 'jeanny/sugar'
 # USAGE ######################################################
 
 # include Jeanny::Sugar
-# 
-# analyze('serp/css/_temp.css', :compare_with => 'classes.saved') and save
+
+# analyze('serp/css/_core.css', :compare_with => 'classes.saved') and save_to 'classes.saved'
+
+# analyze 'serp/css/_core.css'
 # 
 # group :css, :title => 'replacing in stylesheets' do
-#     replace :in => 'serp/block/*/*.css'
+#     replace :in => 'serp/css/_core.css'
+# end
+# 
+# group :js, :title => 'replacing in scripts' do
+#     replace :in => 'serp/js/_serp.js'
 # end
 # 
 # group :html, :title => 'replacing in template files' do
-#     replace :in => ['serp/page/*.xsl']
-#     replace :in => ['serp/block/*/*.xsl']
+#     replace :in => ['serp/static/*.html']
 # end
+
+html = File.open('serp/static/z-image.html').readlines.join
+html.gsub(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
+    # puts tag
+    # puts "\t#{$3.gsub(/\\-/, '-')}"
+    puts tag.gsub($3, 'alert(\'Hello\')')
+    puts
+end
