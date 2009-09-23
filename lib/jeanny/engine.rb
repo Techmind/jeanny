@@ -22,8 +22,6 @@ module Jeanny
                 file_meat = file_meat + File.open_file(file)
             end
 
-            # p file_meat
-            
             # Удаляем все экспрешены
             file_meat = replace_expressions(file_meat) do |expression|
                 ''
@@ -48,7 +46,7 @@ module Jeanny
         
         def compare_with file
                     
-            fail JeannyCompareFileNotFound, "анализируемый файл не найден" unless File.exists?(File.expand_path(file))
+            fail SystemCallError, "анализируемый файл не найден" unless File.exists?(File.expand_path(file))
                     
             saved_classes = { }
                     
@@ -175,8 +173,8 @@ module Jeanny
         end
         
         def get_file_list path
+            
             file_list = []
-
             file_path = [path].flatten.map do |item|
                 File.expand_path(item)
             end
@@ -186,6 +184,7 @@ module Jeanny
             end
 
             file_list.flatten
+            
         end
         
         # Функция пытается найти все экспрешены в css
@@ -267,6 +266,24 @@ module Jeanny
         
         def replace classes
             
+            expression_list = []
+            replace_expressions do |expression|
+                expression_list << JSCode.new(expression).replace(classes)
+                "_ololo_#{expression_list.length}_ololo_"
+            end
+            
+            expression_list.each_with_index do |expression, index|
+                @code.gsub!(/_ololo_#{index + 1}_ololo_/, expression)
+            end
+            
+            @code.gsub!(/\[class\^=(.*?)\]/) do |class_name|
+                if classes.has_key? $1
+                    class_name.gsub($1, classes[$1][0])
+                else
+                    class_name
+                end
+            end
+            
             classes = classes.to_a.sort_by { |x| x[0].length }.reverse
             
             # Случайная строка
@@ -286,39 +303,46 @@ module Jeanny
             
         end
         
+        # Функция пытается найти все экспрешены в css
+        # Eсли задан блок, передает экспрешены ему, иначе - просто удаляет
+        def replace_expressions(&block)
+            css = @code
+            length = css.length    
+            while css.include?('expression(') do
+                brake = 0
+                start = css.index('expression(');
+                block = css[start, length - start]
+
+                block.length.times do |i|
+                    char = block[i, 1]
+                    if char =~ /\(|\)/
+                        brake = brake + 1 if char == '('
+                        brake = brake - 1 if char == ')'
+
+                        if brake == 0
+                            brake = block[0, i + 1]
+                            break
+                        end
+                    end
+                end
+
+                if block_given?
+                    result = yield brake
+                    css.gsub!(brake, result)
+                else
+                    css.gsub!(brake, '')
+                end
+            end
+            
+            @code = css
+            
+        end
+        
     end
     
     class HTMLCode < Code
         
         def replace classes
-            
-            # # p classes
-            # # Находим в файле текст, типа: class = "some text here..."
-            # @code = @code.gsub(/class\s*=\s*('|")(.*?)\1/) do |match|
-            # 
-            #     # берем то что в кавычках и разбиваем по пробелам
-            #     match = $2.split(' ')
-            # 
-            #     # проходимся по получившемуся массиву
-            #     match.map! do |class_name|
-            #         # удаляем проблелы по бокам
-            #         class_name = class_name.strip
-            # 
-            #         # и если в нашем списке замены есть такой класс
-            #         if classes.has_key? class_name
-            #             # заменяем на новое значение
-            #             classes[class_name][0]
-            #         else
-            #             # или оставляем как было
-            #             class_name
-            #         end
-            #     end
-            #     
-            #     "class=\"#{match.join(' ')}\""
-            #     
-            # end
-            # 
-            # @code
             
             # Заменяем классы во встроенных стилях
             @code.gsub!(/<style[^>]*?>(.*?)<\s*\/\s*style\s*>/mi) do |style|
@@ -336,46 +360,48 @@ module Jeanny
                 # берем то что в кавычках и разбиваем по пробелам
                 match = $2.split(' ')
             
+                # # проходимся по получившемуся массиву
+                # match.map! do |class_name|
+                #     # удаляем проблелы по бокам
+                #     class_name = class_name.strip
+                #             
+                #     # и если в нашем списке замены есть такой класс
+                #     if classes.has_key? class_name
+                #         # заменяем на новое значение
+                #         classes[class_name][0]
+                #     else
+                #         # или оставляем как было
+                #         class_name
+                #     end
+                # end
+                
                 # проходимся по получившемуся массиву
                 match.map! do |class_name|
+                    
                     # удаляем проблелы по бокам
                     class_name = class_name.strip
-            
-                    # и если в нашем списке замены есть такой класс
+                    
+                    # и если в нашем списке замены есть такой класс заменяем на новое значение
                     if classes.has_key? class_name
-                        # заменяем на новое значение
                         classes[class_name][0]
-                    else
-                        # или оставляем как было
+                    elsif class_name.eql? 'g-js'
                         class_name
                     end
-                end
+                    
+                end.delete_if { |class_name| class_name.nil? or class_name.empty? }
                 
-                "class=\"#{match.join(' ')}\""
+                unless match.empty?
+                    "class=\"#{match.join(' ')}\""
+                else
+                    ''
+                end
                 
             end
             
             # Находим тэги с аттрибутами в которых может быть js
             @code.gsub!(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
-                tag.gsub($3, JSCode.new($3).replace(classes))
+                tag.gsub($3, JSCode.new($3.gsub(/\\-/ , '-')).replace(classes))
             end
-
-            # # Находим тэги у которых есть классы
-            # @code.gsub!(/<[^>]*?class\s*=\s*("|')(.*?)\1[^>]*?>/i) do |tag|
-            # 
-            #     value_before, value_after = $2, ''
-            # 
-            #     # Удаляем пробелы в начале, в конце, удаляем табы и переводы 
-            #     # стоки и заменяем двойные пробелы на одинарные
-            #     value_after = value_before.to_s.gsub(/^\s+/m, '').gsub(/\s+$/m, '').gsub(/\t|\n/m, '').gsub(/ +/, ' ')
-            # 
-            #     # Разбиваем строку в массив, проходим по нему и если есть 
-            #     # такой класс, заменяем его на новый, иначе оставляем старый. Объединяем массив
-            #     value_after = value_after.split.map { |class_name| class_name = @class_hash[class_name] || class_name }.join(' ')
-            # 
-            #     # Возвращаем найденый тэг заменяя класс на новые
-            #     tag.gsub(value_before, value_after)
-            # end
             
         end
         

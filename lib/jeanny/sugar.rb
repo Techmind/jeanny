@@ -22,49 +22,111 @@ module Jeanny
                         @canbe[:save], @canbe[:process] = true, true
                         @canbe[:analyze] = false
                     end                
-                rescue ArgumentError, RuntimeError, Errno::ENOENT => e
+                rescue StandardError => e
                     $stderr.puts "Ошибка: ".red + e.message
                     exit 0
                 end
                 
                 compare_file = args[:compare_with]
                 
-                unless compare_file.nil?
-                    begin
-                        @engine.compare_with(compare_file) unless compare_file.empty?
-                    rescue JeannyCompareFileNotFound, JeannyCompareFileFormatError => e
-                
-                        $stderr.puts "Внимание: ".yellow + e.message
-                
-                        action = ''
-                
-                        while not(%w(y n yes no).include?(action))
-                            print "Продолжить выполнение (y/n): "
-                            action = gets.chomp!
-                        end
-                
-                        if %w(n no).include?(action)
-                            $stderr.puts "  Работа завершена"
-                            exit 1
-                        else
-                            $stdout.puts "  Продолжаем без сравнивания"
-                        end
-                
+                begin
+                    unless compare_file.nil? and compare_file.empty?
+                        @compare_file = compare_file
+                        @engine.compare_with(compare_file)
+                    else
                         compare_file = ''
-                        retry
-                    rescue RuntimeError => e
-                        $stderr.puts "Ошибка: ".red + e.message
-                        exit 0
                     end
-                else
-                    @engine.fill_short_class_names
+                rescue SystemCallError, JeannyCompareFileFormatError => e
+        
+                    $stderr.puts "Внимание: ".yellow + e.message
+        
+                    action = ''
+        
+                    while not(%w(y n yes no).include?(action))
+                        print "Продолжить выполнение (y/n): "
+                        action = gets.chomp!
+                    end
+        
+                    if %w(n no).include?(action)
+                        $stderr.puts "  Работа завершена"
+                        exit 1
+                    else
+                        $stdout.puts "  Продолжаем без сравнивания"
+                    end
+        
+                    compare_file = ''
+                rescue StandardError => e
+                    $stderr.puts "Ошибка: ".red + e.message
+                    exit 0
+                end
+                
+                @engine.fill_short_class_names if compare_file.empty?
+                
+                # unless compare_file.nil? and compare_file.empty?
+                #     begin
+                #         @engine.compare_with(compare_file) unless compare_file.empty?
+                #         @compare_file = compare_file
+                #     rescue SystemCallError, JeannyCompareFileFormatError => e
+                # 
+                #         $stderr.puts "Внимание: ".yellow + e.message
+                # 
+                #         action = ''
+                # 
+                #         while not(%w(y n yes no).include?(action))
+                #             print "Продолжить выполнение (y/n): "
+                #             action = gets.chomp!
+                #         end
+                # 
+                #         if %w(n no).include?(action)
+                #             $stderr.puts "  Работа завершена"
+                #             exit 1
+                #         else
+                #             $stdout.puts "  Продолжаем без сравнивания"
+                #         end
+                # 
+                #         compare_file = ''
+                #         retry
+                #     rescue StandardError => e
+                #         $stderr.puts "Ошибка: ".red + e.message
+                #         exit 0
+                #     end
+                # else
+                #     @engine.fill_short_class_names
+                #     puts "!!!"
+                # end
+                
+                
+                @engine.classes.to_a.sort_by { |x| x[0] }.each do |x|
+                    if x[1][1] == 0
+                       puts  "#{x[0].ljust(40)}- #{x[1][0]}".green
+                    else
+                       puts "#{x[0].ljust(40)}- #{x[1][0]}".yellow
+                    end
                 end
 
                 true
             end
 
             def save file = ''
-                @engine.save file
+                
+                fail SystemCallError, 'на данном этапе нельзя вызывать сохранение классов' unless canbe[:save]
+                
+                unless @compare_file.empty? and file.empty?
+                    @engine.save(file.empty? ? @compare_file : file)
+                end
+            
+            rescue SystemCallError => e
+            
+                print "#{'Внимание:'.yellow} #{e.message}. "
+            
+                action = ''
+                while not(%w(y n yes no).include?(action))
+                    print "Продолжить выполнение (y/n): "
+                    action = gets.chomp!
+                end
+            
+                exit 1 if %w(n no).include?(action)
+
             end
 
             def save_to file
@@ -92,7 +154,7 @@ module Jeanny
                     @canbe[:replace] = false
                     @canbe[:process] = true
                     
-                rescue RuntimeError => e
+                rescue StandardError => e
                     $stderr.puts "Ошибка: ".red + e.message
                     exit 0
                 end
@@ -101,7 +163,7 @@ module Jeanny
                     unless @process_block.empty?
                         @engine.replace type, @process_block
                     end
-                rescue RuntimeError => e
+                rescue StandardError => e
                     $stderr.puts "Ошибка: ".red + e.message
                     exit 0
                 end
