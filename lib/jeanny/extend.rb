@@ -23,7 +23,7 @@ class File
                 open(expand_path(file), 'r').read
             else
                 # Возвращаем пустую строку
-                raise Errno::ENOENT, "Файл не найден: #{expand_path(file)}"
+                raise Jeanny::JeannyFileNotFound, "Файл не найден: #{expand_path(file)}"
             end
         end
     end

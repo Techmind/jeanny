@@ -14,107 +14,90 @@ module Jeanny
             end
 
             def analyze(path, args = {})
-                
-                # Есть:
-                #   1. Путь или множество путей к файлам которые надо проверить на наличие классов
-                #   2. Параметры
-                # 
-                # Надо:
-                #   1. Отдать на анализ пути файлов
-                #   2. Понять, если парам
-                # 
+
                 refresh
 
                 begin
-                    if @engine.analyze(path)
+                    
+                    file_list = File.list path
+                    
+                    fail JeannyFileNotFound, "файлы для анализа не найдены (Jeanny::Engine.analyze)" if file_list.empty?
+                    
+                    file_meat = ''
+                    file_list.each do |file|
+                        file_meat = file_meat + File.open_file(file)
+                    end
+                    
+                    if @engine.analyze file_meat
                         @canbe[:save], @canbe[:process] = true, true
                         @canbe[:analyze] = false
                     end
+                    
                 rescue StandardError => e
                     $stderr.puts "Ошибка: ".red + e.message
-                    exit 0
-                end
-                
-                compare_file = args[:compare_with]
-                
-                begin
-                    @engine.compare_with compare_file
-                rescue JeannyFileNotFound, JeannyCompareFileFormatError => e
-                    
-                    $stderr.puts "Внимание: ".yellow + e.message
-                        
-                    action = ''
-                        
-                    while not(%w(y n yes no).include?(action))
-                        print "Продолжить выполнение (y/n): "
-                        action = gets.chomp!
-                    end
-                        
-                    if %w(n no).include?(action)
-                        $stderr.puts "  Работа завершена"
-                        exit 1
-                    else
-                        $stdout.puts "  Продолжаем без сравнивания"
-                    end
-                        
-                    compare_file = ''
-                    
-                rescue Exception => e
-                    puts e.message
                     exit 1
                 end
                 
-                # begin
-                #     unless compare_file.nil? and compare_file.empty?
-                #         @compare_file = compare_file
-                #         @engine.compare_with(compare_file)
-                #     else
-                #         compare_file = ''
-                #     end
-                # rescue JeannyFileNotFound, JeannyCompareFileFormatError => e
-                #         
-                #     $stderr.puts "Внимание: ".yellow + e.message
-                #         
-                #     action = ''
-                #         
-                #     while not(%w(y n yes no).include?(action))
-                #         print "Продолжить выполнение (y/n): "
-                #         action = gets.chomp!
-                #     end
-                #         
-                #     if %w(n no).include?(action)
-                #         $stderr.puts "  Работа завершена"
-                #         exit 1
-                #     else
-                #         $stdout.puts "  Продолжаем без сравнивания"
-                #     end
-                #         
-                #     compare_file = ''
-                # rescue StandardError => e
-                #     $stderr.puts "Ошибка: ".red + e.message
-                #     exit 0
-                # end
+                @compare_file = args[:compare_with] or ''
                 
-                # @engine.fill_short_class_names if compare_file.empty?
-                # 
-                # @engine.classes.to_a.sort_by { |x| x[0] }.each do |x|
-                #     if x[1][1] == 0
-                #        puts  "#{x[0].ljust(40)}- #{x[1][0]}".green
-                #     else
-                #        puts "#{x[0].ljust(40)}- #{x[1][0]}".yellow  
-                #     end
-                # end
+                # Завершаем метод если сравнивать ни с чем не надо
+                return true if @compare_file.empty?
+                
+                # Если файл не найден, спрашиваем у юзернейма, как быть дальше,
+                # продолжать без сравнения или прекратить работу.
+                unless File.exists? @compare_file
+                    puts "Файл с сохраненными классами не найден. Продолжаем без сравнения.".yellow
+                end
+                
+                saved_classes = []
+                
+                begin
+                    # Открываем файл
+                    raw_file = File.open_file @compare_file
+                    raw_data = raw_file.split "\n"
+        
+                    # ... и читаем структиуру
+                    raw_data.map do |line|
+                        line.split(':').map do |hash|
+                            hash.strip
+                        end
+                    end.each_with_index do |item, index|
+                        if item.length != 2 or item[1].empty?
+                            fail JeannyCompareFileFormatError, "Какая то ерунда с одим (а может больше) классом. Можно пропустить, но хрен его знает что дальше будет…\n" + "файл: #{file}, строка: #{index}\n#{raw_data[index]}".red 
+                        else
+                            saved_classes << [item[0], item[1]]
+                        end
+                    end
+                rescue Exception => e
+                    $stderr.puts e.message
+                    exit 1
+                end
+                
+                # Сравниваем
+                new_classes = @engine.compare_with saved_classes
+                
+                unless new_classes.nil? or new_classes.empty?
+                    puts 'Новые классы: '
+                    new_classes.each do |class_name|
+                        puts "  #{class_name.ljust(40, '.')}#{@engine.classes[class_name].green}"
+                    end
+                end
 
                 true
+                
             end
 
             def save file = ''
                 
-                fail SystemCallError, 'на данном этапе нельзя вызывать сохранение классов' unless canbe[:save]
+                fail RuntimeError, 'на данном этапе нельзя вызывать сохранение классов' unless canbe[:save]
+
+                file = file.empty? ? @compare_file : file
                 
-                unless @compare_file.empty? and file.empty?
-                    @engine.save(file.empty? ? @compare_file : file)
-                end
+                File.open(File.expand_path(file), 'w') do |f|
+                    @engine.classes.each do |key, val|
+                        f.puts "#{key}: #{val.rjust(40 - key.length)}"
+                    end                
+                end unless @compare_file.empty? and file.empty?
 
             end
 
@@ -145,7 +128,7 @@ module Jeanny
                     
                 rescue Exception => e
                     $stderr.puts "Ошибка: ".red + e.message
-                    exit 0
+                    exit 1
                 end
                 
                 begin
@@ -156,7 +139,7 @@ module Jeanny
                     end
                 rescue Exception => e
                     $stderr.puts "Ошибка: ".red + e.message
-                    exit 0
+                    exit 1
                 end
                 
             end
@@ -193,6 +176,18 @@ module Jeanny
 
                 @process_block_start = false
                 @process_block = []
+                
+            end
+
+            def answer question, yes, no
+                
+                action, answers = '', [yes, no].flatten
+                until answers.include? action
+                    print "#{question} "
+                    action = gets.chomp!
+                end
+                    
+                [yes].flatten.include? action
                 
             end
 
