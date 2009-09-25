@@ -1,58 +1,78 @@
+require 'rubygems'
+require 'ruby-debug'
+
 module Jeanny
 
+    #
+    # Класс который выполнят всю основную работу. 
+    # Парсит и заменяет классы, сохраняет и сравнивает их.
+    #
     class Engine
-        
+
         attr_reader :classes
-        
+
         def initialize
-            @classes = {}
+            @classes = Dictionary.new
         end
 
-        # Метод ищет имена классов в переданном списке файлов
+        #
+        # Метод ищет имена классов, в переданных ему файлах
+        # В качестве path может выступать массив или строка с расположенеим анализируемых файлов. Можно использовать * и ? как в поиске.
+        #
         def analyze path
-
-            fail ArgumentError, 'неверный аргумент (пустой)' if path.nil? or path.empty?
-
-            file_list = get_file_list(path)
             
-            fail Errno::ENOENT, "анализируемые файлы не найдены" if file_list.nil? or file_list.empty?
+            fail ArgumentError, "передан неверный аргумент (Jeanny::Engine.analyze)" if path.nil? or path.empty?
+
+            # получаем «реальный» список файлов который надо проверить
+            file_list = File.list path
+
+            fail JeannyFileNotFound, "файлы для анализа не найдены (Jeanny::Engine.analyze)" if file_list.empty?
 
             file_meat = ''
             file_list.each do |file|
                 file_meat = file_meat + File.open_file(file)
             end
 
-            # Удаляем все экспрешены
-            file_meat = replace_expressions(file_meat) do |expression|
-                ''
-            end
+            # Удаляем все экспрешены и удаляем все что в простых и фигурных скобках
+            file_meat.remove_expressions!.gsub(/\{.*?\}/m , '{}').gsub(/\(.*?\)/, '()')
 
-            # Удаляем все что в фигурных и простых скобках
-            file_meat = file_meat.gsub(/\{.*?\}/m, '{}').gsub(/\(.*?\)/, '()')
-            
+            short_words = generate_short_words
+
             # Находим имена классов
             file_meat.gsub(/\.([^\.,\{\} :#\[\]\*\n\s]+)/) do |match|
-            
                 # Если найденная строка соответствует маске и класс еще не был добавлен — добавляем его
-                @classes[$1] = '' if match =~ /^\.([a-z]-.+)$/ and not(@classes.has_key?($1)) 
-                
+                @classes[$1] = short_words.shift if match =~ /^\.([a-z]-.+)$/ and not(@classes.include? $1 ) 
             end
-            
-            fail JeannyNoClassesFound, "похоже, что в анализируемом файле нет классов подходящих по условию" if @classes.empty?
-            
-            true
+
+            fail JeannyClassesNotFound, "похоже, что в анализируемом файле нет классов подходящих по условию" if @classes.empty?
+
+            @classes
 
         end
-        
+
         def compare_with file
-                    
-            fail SystemCallError, "анализируемый файл не найден" unless File.exists?(File.expand_path(file))
-                    
-            saved_classes = { }
-                    
+
+            # Есть:
+            #   1. Массив классов из css файлов
+            # 
+            # Надо:
+            #   1. Открыть файл сравнения
+            #   2. Достать от туда классы
+            #   3. Найти новые классы и добавить их к сохраненным
+            #   5. Сгенирировать массив коротких имен, убрать от туда все которые 
+            #      используются в сохраненных классах, и для новых добавленных установить
+            #      значения из получившегося массива.
+            #   6. По возможности сохранить порядок
+            #   7. ???
+            #   8. Profit
+
+            fail JeannyFileNotFound, "анализируемый файл не найден" unless File.exists?(File.expand_path(file))
+
+            saved_classes = Dictionary.new
+
             raw_file = File.open_file(file)
             raw_data = raw_file.split("\n")
-                    
+
             raw_data.map do |line|
                 line.split(':').map do |hash|
                     hash.strip
@@ -64,102 +84,83 @@ module Jeanny
                     saved_classes[item[0]] = item[1]
                 end
             end
-                    
-            fail JeannyCompareFileFormatError, "сравниваемый файл пуст или имеет неверный формат" if saved_classes.nil? or not(saved_classes.kind_of?(Hash)) or saved_classes.empty?
-            
-            (@classes.keys & saved_classes.keys).each do |class_name|
-                @classes[class_name] = [saved_classes[class_name], 1]               # restored classes
-            end
-            
-            short_words = generate_short_words
 
-            empty_classes = @classes.select { |key, val| val.empty? }
-            
-            unless empty_classes.nil? or empty_classes.empty?
-                
-                # Удаляем уже используемые короткие имена из списка
-                short_words.delete_if { |x| saved_classes.values.include?(x) }
-                
-                # И понеслась...
-                empty_classes.each_with_index do |key, index|
-                    @classes[key[0]] = [short_words[index], 0]                      # new classes
-                end
-                
+            fail JeannyCompareFileFormatError, "сравниваемый файл пуст или имеет неверный формат" if saved_classes.nil? or saved_classes.empty?
+
+            # находим новые классы
+            new_classes = ((saved_classes.keys | @classes.keys) - saved_classes.keys)
+
+            @classes = saved_classes
+
+            # генерируем короткие имена и удаляем из них уже используемые
+            short_words = generate_short_words - saved_classes.values
+            new_classes.each do |class_name|
+                @classes[class_name] = short_words.shift
+            end
+
+            new_classes
+
+        end
+
+        # Метод для сохранения классов
+        def save file
+
+            File.open(File.expand_path(file), 'w') do |f|
+                @classes.each do |key, val|
+                    f.puts "#{key}: #{val.rjust(40 - key.length)}"
+                end                
             end
 
         end
         
-        def fill_short_class_names
-            
-            short_words = generate_short_words
-            
-            @classes.keys.each_with_index do |key, index|
-                @classes[key] = [short_words[index], 0]                             # new classes
-            end
-            
-        end
-            
-        def replace type, struct
+        def replace path, type
             
             fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
             
-            struct.each do |struct_item|
-                file_list = get_file_list struct_item[:in]
-                file_list.delete_if do |path|
-                    
-                    delete = false
-                    
-                    struct_item[:ex].each do |exclude_rule|
-                        
-                        if exclude_rule.kind_of? Regexp
-                            delete = File.basename(path) =~ exclude_rule
-                        else
-                            delete = File.basename(path).include?(exclude_rule)
-                        end
-                        
-                        break if delete
-                    end
-                    
-                    delete
-                    
+            file_list = File.list path
+            file_list.each do |file|
+                
+                data = File.open_file file
+                
+                code = case type
+                    when :js JSCode
+                    when :css CSSCode
+                    when :html HTMLCode
+                    when :plain PlainCode
                 end
                 
-                file_list.each do |path|
-                    
-                    data = File.open_file(path)
-                    
-                    code = case type
-                        when :js then JSCode
-                        when :css then CSSCode
-                        when :html then HTMLCode
-                    end
-                    
-                    code = code.new data
-                    data = code.replace @classes
-                    
-                    File.save_file(path, data)
-                    
-                end
+                code = code.new data
+                data = code.replace @classes
+                
+                File.save_file file, data
                 
             end
             
         end
-        
-        def save file
-            file = File.expand_path(file)
-            data = @classes.map { |x| [x[0], x[1][0]].join(': ') }.sort_by { |x| x }.join("\n")
-            
-            File.save_file(file, data)
-        end
-        
+
         private
 
-        # Метод генерирует массив коротких имен.
+        def get_file_list path
+
+            # file_list = []
+            # file_path = [path].flatten.map do |item|
+            #     File.expand_path(item)
+            # end
+            # 
+            # file_path.each do |file|
+            #     file_list << Dir[file]
+            # end
+            # 
+            # file_list.flatten
+
+        end
+
+        # Метод генерирует и возращает массив коротких имен.
         # По умолчанию генерируется 38471 имя. Если надо больше, добавить — легко        
         def generate_short_words again = false
-            
+
             short_words = []
-            
+
             %w(a aa a0 a_ a- aaa a00 a0a aa0 aa_ a_a aa- a-a a0_ a0- a_0 a-0).each do |name|
                 max = name.length + 1
                 while name.length < max
@@ -167,244 +168,93 @@ module Jeanny
                     name = name.next
                 end
             end
-            
+
             short_words
-            
-        end
-        
-        def get_file_list path
-            
-            file_list = []
-            file_path = [path].flatten.map do |item|
-                File.expand_path(item)
-            end
-            
-            file_path.each do |file|
-                file_list << Dir[file]
-            end
 
-            file_list.flatten
-            
-        end
-        
-        # Функция пытается найти все экспрешены в css
-        # Eсли задан блок, передает экспрешены ему, иначе - просто удаляет
-        def replace_expressions(css, &block)
-            length = css.length    
-            while css.include?('expression(') do
-                brake = 0
-                start = css.index('expression(');
-                block = css[start, length - start]
-
-                block.length.times do |i|
-                    char = block[i, 1]
-                    if char =~ /\(|\)/
-                        brake = brake + 1 if char == '('
-                        brake = brake - 1 if char == ')'
-
-                        if brake == 0
-                            brake = block[0, i + 1]
-                            break
-                        end
-                    end
-                end
-
-                if block_given?
-                    result = yield brake
-                    css.gsub!(brake, result)
-                else
-                    css.gsub!(brake, '')
-                end
-            end
-
-            css
         end
 
     end
-    
-    class Code
-        
-        attr_reader :code
-        
-        def initialize code
-            @code = code
+
+    class Dictionary
+
+        #
+        # Этот класс, попытка реализовать что нибудь похожее на упорядоченный хэш
+        #
+
+        include Enumerable
+
+        attr_reader :keys, :values
+
+        def initialize hash = {  }
+            @keys = [ ]
+            @values = [ ]
+
+            hash.each_pair { |key, val| append key, val } unless hash.empty?
+
         end
-        
-        def replace classes
-            
+
+        def [](key)
+            if include? key
+                @values[@keys.index(key)]
+            else
+                nil
+            end
         end
-        
-    end
-    
-    class JSCode < Code
-        
-        def replace classes
-            
-            classes = classes.to_a.sort_by { |x| x[0].length }.reverse
-            
-            # Находим все строки и регулярные выражения
-            @code.gsub(/(("|'|\/)((\\\2|.)*?)\2)/m) do |string|
 
-                string_before, string_after = $3, $3
-
-                # Проходимся по всем классам
-                classes.each do |class_name|
-
-                    # И заменяем старый класс, на новый
-                    string_after = string_after.gsub(class_name[0], class_name[1][0])
-                end
-
-                string.gsub(string_before, string_after.gsub(/(\\+)("|')/, "\\1\\1\\2"))
-
+        def []=(key, value)
+            if include? key
+                @values[@keys.index(key)] = value
+            else
+                append key, value
             end
-            
         end
-        
-    end
-    
-    class CSSCode < Code
-        
-        def replace classes
-            
-            expression_list = []
-            replace_expressions do |expression|
-                expression_list << JSCode.new(expression).replace(classes)
-                "_ololo_#{expression_list.length}_ololo_"
-            end
-            
-            expression_list.each_with_index do |expression, index|
-                @code.gsub!(/_ololo_#{index + 1}_ololo_/, expression)
-            end
-            
-            @code.gsub!(/\[class\^=(.*?)\]/) do |class_name|
-                if classes.has_key? $1
-                    class_name.gsub($1, classes[$1][0])
-                else
-                    class_name
-                end
-            end
-            
-            classes = classes.to_a.sort_by { |x| x[0].length }.reverse
-            
-            # Случайная строка
-            unique_string = Time.now.object_id.to_s
 
-            # Проходимся по классам
-            classes.each do |class_name|
-
-                # Заменяем старое имя класса на новое, плюс случайное число,
-                # чтобы знать что этот класс мы уже изменяли
-                @code = @code.gsub(/\.#{class_name[0]}(?=[^-\w])/, ".#{unique_string}#{class_name[1][0]}")
-            end
-
-            # После замены имен классов, случайное число уже не нужно,
-            # так что удаляем его, и возвращаем css с замененными значениями
-            @code.gsub(unique_string, '')
-            
+        def append key, value
+            @keys << key
+            @values << value
         end
-        
-        # Функция пытается найти все экспрешены в css
-        # Eсли задан блок, передает экспрешены ему, иначе - просто удаляет
-        def replace_expressions(&block)
-            css = @code
-            length = css.length    
-            while css.include?('expression(') do
-                brake = 0
-                start = css.index('expression(');
-                block = css[start, length - start]
 
-                block.length.times do |i|
-                    char = block[i, 1]
-                    if char =~ /\(|\)/
-                        brake = brake + 1 if char == '('
-                        brake = brake - 1 if char == ')'
-
-                        if brake == 0
-                            brake = block[0, i + 1]
-                            break
-                        end
-                    end
-                end
-
-                if block_given?
-                    result = yield brake
-                    css.gsub!(brake, result)
-                else
-                    css.gsub!(brake, '')
-                end
-            end
-            
-            @code = css
-            
+        def include? class_name
+            @keys.include? class_name
         end
-        
-    end
-    
-    class HTMLCode < Code
-        
-        def replace classes
-            
-            # Заменяем классы во встроенных стилях
-            @code.gsub!(/<style[^>]*?>(.*?)<\s*\/\s*style\s*>/mi) do |style|
-                style.gsub($1, CSSCode.new($1).replace(classes))
-            end
 
-            # Заменяем классы во встроенных скриптах
-            @code.gsub!(/<script[^>]*?>(.*?)<\s*\/\s*script\s*>/mi) do |script|
-                script.gsub($1, JSCode.new($1).replace(classes))
-            end
-            
-            # Находим тэги у которых есть классы, типа: class = "some text here..."
-            @code.gsub!(/class\s*=\s*('|")(.*?)\1/) do |match|
-            
-                # берем то что в кавычках и разбиваем по пробелам
-                match = $2.split(' ')
-            
-                # # проходимся по получившемуся массиву
-                # match.map! do |class_name|
-                #     # удаляем проблелы по бокам
-                #     class_name = class_name.strip
-                #             
-                #     # и если в нашем списке замены есть такой класс
-                #     if classes.has_key? class_name
-                #         # заменяем на новое значение
-                #         classes[class_name][0]
-                #     else
-                #         # или оставляем как было
-                #         class_name
-                #     end
-                # end
-                
-                # проходимся по получившемуся массиву
-                match.map! do |class_name|
-                    
-                    # удаляем проблелы по бокам
-                    class_name = class_name.strip
-                    
-                    # и если в нашем списке замены есть такой класс заменяем на новое значение
-                    if classes.has_key? class_name
-                        classes[class_name][0]
-                    elsif class_name.eql? 'g-js'
-                        class_name
-                    end
-                    
-                end.delete_if { |class_name| class_name.nil? or class_name.empty? }
-                
-                unless match.empty?
-                    "class=\"#{match.join(' ')}\""
-                else
-                    ''
-                end
-                
-            end
-            
-            # Находим тэги с аттрибутами в которых может быть js
-            @code.gsub!(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
-                tag.gsub($3, JSCode.new($3.gsub(/\\-/ , '-')).replace(classes))
-            end
-            
+        alias :has_key? include?
+
+        def empty?
+            @keys.empty?
         end
-        
+
+        def each
+            @keys.length.times do |i|
+                yield @keys[i], @values[i]
+            end
+        end
+
+        def select_keys_if &block
+            array = []
+            @keys.length.times do |i|
+                need_append = yield @keys[i], @values[i]
+                array << @keys[i] if need_append
+            end
+            array
+        end
+
+        def length
+            @keys.length
+        end
+
+        def last
+            unless @keys.empty?
+                [@keys.last, @values.last]
+            end
+        end
+
+        def to_s
+            each do |key, val|
+                puts key.ljust(40) + val
+            end
+        end
+
     end
 
 end
