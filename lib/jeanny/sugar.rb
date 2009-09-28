@@ -38,7 +38,7 @@ module Jeanny
                     exit 1
                 end
                 
-                @compare_file = args[:compare_with] or ''
+                @compare_file = (args[:compare_with] or '')
                 
                 # Завершаем метод если сравнивать ни с чем не надо
                 return true if @compare_file.empty?
@@ -162,9 +162,8 @@ module Jeanny
                             data = @engine.replace data, type
                                                     
                             File.save_file file, data
-                            # @engine.replace file, type
+                            
                             puts file.green
-                            # puts data
                         rescue Exception => e
                             puts e.message + "\n#{$@}"
                             exit 1
@@ -172,40 +171,6 @@ module Jeanny
                         
                     end
                 end
-                
-                # begin
-                #     @process_block.each do |replace|
-                #         File.list replace[:in] do |file, status|
-                #             
-                #             next unless status.zero?
-                #             
-                #             exclude = false
-                #             replace[:ex].each do |exclude_rule|
-                #                 if exclude_rule.kind_of? Regexp
-                #                     exclude = file =~ exclude_rule
-                #                 else
-                #                     exclude = file.include? exclude_rule
-                #                 end
-                #                 break if exclude
-                #             end
-                #             
-                #             next if exclude
-                #             
-                #             begin
-                #                 data = File.open_file file
-                #                 data = @engine.replace data, type
-                #             
-                #                 File.save_file file, data
-                #             rescue
-                #                 
-                #             end
-                #             
-                #         end
-                #     end
-                # rescue Exception => e
-                #     $stderr.puts "Ошибка: ".red + e.message + " (#{$@})"
-                #     exit 1
-                # end
                 
             end
             

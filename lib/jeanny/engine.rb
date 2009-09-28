@@ -59,7 +59,7 @@ module Jeanny
 
         end
         
-        #
+        # Метод для замены классов
         def replace data, type
             
             fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
@@ -306,9 +306,12 @@ module Jeanny
                     # и если в нашем списке замены есть такой класс заменяем на новое значение
                     if classes.has_key? class_name
                         classes[class_name]
-                    elsif class_name.eql? 'g-js'
+                    else
                         class_name
                     end
+                    # elsif class_name.eql? 'g-js'
+                    #     class_name
+                    # end
                     
                 end.delete_if { |class_name| class_name.nil? or class_name.empty? }
                 
@@ -316,12 +319,14 @@ module Jeanny
                     "class=\"#{match.join(' ')}\""
                 else
                     ''
+                    # puts match
+                    # match
                 end
                 
             end
             
             # Находим тэги с аттрибутами в которых может быть js
-            @code.gsub!(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
+            @code.gsub(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
                 tag.gsub($3, JSCode.new($3.gsub(/\\-/ , '-')).replace(classes))
             end
             
