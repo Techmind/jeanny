@@ -160,7 +160,7 @@ module Jeanny
                         begin
                             data = File.open_file file
                             data = @engine.replace data, type
-                                                    
+
                             File.save_file file, data
                             
                             puts file.green
