@@ -47,6 +47,7 @@ module Jeanny
                 # продолжать без сравнения или прекратить работу.
                 unless File.exists? @compare_file
                     puts "Файл с сохраненными классами не найден. Продолжаем без сравнения.".yellow
+                    return true
                 end
                 
                 saved_classes = []
@@ -130,17 +131,81 @@ module Jeanny
                     $stderr.puts "Ошибка: ".red + e.message
                     exit 1
                 end
-                
-                begin
-                    @process_block.each do |replace|
-                        File.list replace[:in] do |file, status|
-                            @engine.replace file, type
+
+                @process_block.each do |replace|
+                    File.list replace[:in] do |file, status|
+                        
+                        # next unless status.zero?
+                        unless status.zero?
+                            puts file.red
+                            next
                         end
+                        
+                        exclude = false
+                        replace[:ex].each do |exclude_rule|
+                            if exclude_rule.kind_of? Regexp
+                                exclude = file =~ exclude_rule
+                            else
+                                exclude = file.include? exclude_rule
+                            end
+                            break if exclude
+                        end
+                        
+                        # next if exclude
+                        if exclude
+                            puts file.yellow
+                            next
+                        end
+                        
+                        begin
+                            data = File.open_file file
+                            data = @engine.replace data, type
+                                                    
+                            File.save_file file, data
+                            # @engine.replace file, type
+                            puts file.green
+                            # puts data
+                        rescue Exception => e
+                            puts e.message + "\n#{$@}"
+                            exit 1
+                        end
+                        
                     end
-                rescue Exception => e
-                    $stderr.puts "Ошибка: ".red + e.message
-                    exit 1
                 end
+                
+                # begin
+                #     @process_block.each do |replace|
+                #         File.list replace[:in] do |file, status|
+                #             
+                #             next unless status.zero?
+                #             
+                #             exclude = false
+                #             replace[:ex].each do |exclude_rule|
+                #                 if exclude_rule.kind_of? Regexp
+                #                     exclude = file =~ exclude_rule
+                #                 else
+                #                     exclude = file.include? exclude_rule
+                #                 end
+                #                 break if exclude
+                #             end
+                #             
+                #             next if exclude
+                #             
+                #             begin
+                #                 data = File.open_file file
+                #                 data = @engine.replace data, type
+                #             
+                #                 File.save_file file, data
+                #             rescue
+                #                 
+                #             end
+                #             
+                #         end
+                #     end
+                # rescue Exception => e
+                #     $stderr.puts "Ошибка: ".red + e.message + " (#{$@})"
+                #     exit 1
+                # end
                 
             end
             

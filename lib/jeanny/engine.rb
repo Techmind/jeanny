@@ -1,5 +1,3 @@
-require 'rubygems'
-require 'ruby-debug'
 
 module Jeanny
 
@@ -19,18 +17,19 @@ module Jeanny
             fail TypeError, "передан неверный аргумент (Jeanny::Engine.analyze)" if file_meat.empty?
 
             # Удаляем все экспрешены и удаляем все что в простых и фигурных скобках
-            file_meat.remove_expressions!.gsub(/\{.*?\}/m , '{}').gsub(/\(.*?\)/, '()')
+            file_meat = file_meat.remove_expressions.gsub(/\{.*?\}/m , '{}').gsub(/\(.*?\)/, '()')
 
             short_words = generate_short_words
 
             # Находим имена классов
-            file_meat.gsub(/\.([^\.,\{\} :#\[\]\*\n\s]+)/) do |match|
+            file_meat.gsub(/\.([^\.,\{\} :#\[\]\*\n\s\/]+)/) do |match|
                 # Если найденная строка соответствует маске и класс еще не был добавлен — добавляем его
                 @classes[$1] = short_words.shift if match =~ /^\.([a-z]-.+)$/ and not(@classes.include? $1 ) 
             end
 
             fail JeannyClassesNotFound, "похоже, что в анализируемом файле нет классов подходящих по условию" if @classes.empty?
-
+            
+            # @classes.sort!
             @classes
 
         end
@@ -53,34 +52,29 @@ module Jeanny
             new_classes.each do |class_name|
                 @classes[class_name] = short_words.shift
             end
+            
+            # @classes.sort!
 
             new_classes
 
         end
         
         #
-        def replace path, type
+        def replace data, type
             
             fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
+            fail "nil Ololo" if data.nil?
             
-            file_list = File.list path
-            file_list.each do |file|
-                
-                data = File.open_file file
-                
-                # code = case type
-                #     when :js JSCode
-                #     when :css CSSCode
-                #     when :html HTMLCode
-                #     when :plain PlainCode
-                # end
-                # 
-                # code = code.new data
-                # data = code.replace @classes
-                # 
-                # File.save_file file, data
-                
+            code = case type
+                when :js then JSCode
+                when :css then CSSCode
+                when :html then HTMLCode
+                when :plain then PlainCode
             end
+            
+            @classes.sort!
+            
+            code.new(data).replace @classes
             
         end
 
@@ -106,11 +100,8 @@ module Jeanny
 
     end
 
+    # Класс-попытка реализовать что нибудь похожее на упорядоченный хэш
     class Dictionary
-
-        #
-        # Этот класс, попытка реализовать что нибудь похожее на упорядоченный хэш
-        #
 
         include Enumerable
 
@@ -162,6 +153,13 @@ module Jeanny
                 yield @keys[i], @values[i]
             end
         end
+        
+        def sort!
+            @keys.map { |x| [x, @values[@keys.index(x)]] }.sort_by { |x| x[0].length }.reverse.each_with_index do |x, i|
+                @keys[i] = x[0]
+                @values[i] = x[1]
+            end
+        end
 
         def select_keys_if &block
             array = []
@@ -187,7 +185,152 @@ module Jeanny
                 puts key.ljust(40) + val
             end
         end
+        
+        def to_a
+            @keys.map { |x| [x, @values[@keys.index(x)]] }
+        end
 
+    end
+    
+    class Code
+        
+        attr_reader :code
+        
+        def initialize code
+            @code = code
+        end
+        
+        def replace classes
+            
+        end
+        
+    end
+    
+    class JSCode < Code
+        
+        def replace classes
+            
+            # Находим все строки и регулярные выражения
+            @code.gsub(/(("|'|\/)((\\\2|.)*?)\2)/m) do |string|
+
+                string_before, string_after = $3, $3
+
+                # Проходимся по всем классам
+                classes.each do |full_name, short_name|
+
+                    # И заменяем старый класс, на новый
+                    string_after = string_after.gsub(full_name, short_name)
+                end
+
+                string.gsub(string_before, string_after.gsub(/(\\+)("|')/, "\\1\\1\\2"))
+
+            end
+            
+        end
+        
+    end
+    
+    class CSSCode < Code
+        
+        def replace classes
+            
+            # Вырезаем экспрешены
+            expression_list = []
+            @code.replace_expressions! do |expression|
+                # и заменяем в них классы как в js
+                expression_list << JSCode.new(expression).replace(classes)
+                "_ololo_#{expression_list.length}_ololo_"
+            end
+            
+            # Вставляем экспрешены с замененными классами обратно
+            expression_list.each_with_index do |expression, index|
+                @code.gsub! /_ololo_#{index + 1}_ololo_/, expression
+            end
+            
+            @code.gsub!(/\[class\^=(.*?)\]/) do |class_name|
+                if classes.include? $1
+                    class_name.gsub $1, classes[$1]
+                else
+                    class_name
+                end
+            end
+            
+            # Случайная строка
+            unique_string = Time.now.object_id.to_s
+
+            # Проходимся по классам
+            classes.each do |full_name, short_name|
+                
+                # Заменяем старое имя класса на новое, плюс случайное число,
+                # чтобы знать что этот класс мы уже изменяли
+                #   TODO: Может это нахрен не надо?
+                @code = @code.gsub(/\.#{full_name}(?=[^-\w])/, ".#{unique_string}#{short_name}")
+            end
+
+            # После замены имен классов, случайное число уже не нужно,
+            # так что удаляем его, и возвращаем css с замененными значениями
+            @code.gsub(unique_string, '')
+            
+        end
+        
+    end
+    
+    class HTMLCode < Code
+        
+        def replace classes
+            
+            # Заменяем классы во встроенных стилях
+            @code.gsub!(/<style[^>]*?>(.*?)<\s*\/\s*style\s*>/mi) do |style|
+                style.gsub($1, CSSCode.new($1).replace(classes))
+            end
+
+            # Заменяем классы во встроенных скриптах
+            @code.gsub!(/<script[^>]*?>(.*?)<\s*\/\s*script\s*>/mi) do |script|
+                script.gsub($1, JSCode.new($1).replace(classes))
+            end
+            
+            # Находим аттрибуты с именем "class"
+            #   TODO: Надо находить не просто "class=blablabl", а искать
+            #         именно теги с аттрибутом "class"
+            @code.gsub!(/class\s*=\s*('|")(.*?)\1/) do |match|
+            
+                # берем то что в кавычках и разбиваем по пробелам
+                match = $2.split(' ')
+                
+                # проходимся по получившемуся массиву
+                match.map! do |class_name|
+                    
+                    # удаляем проблелы по бокам
+                    class_name = class_name.strip
+                    
+                    # и если в нашем списке замены есть такой класс заменяем на новое значение
+                    if classes.has_key? class_name
+                        classes[class_name]
+                    elsif class_name.eql? 'g-js'
+                        class_name
+                    end
+                    
+                end.delete_if { |class_name| class_name.nil? or class_name.empty? }
+                
+                unless match.empty?
+                    "class=\"#{match.join(' ')}\""
+                else
+                    ''
+                end
+                
+            end
+            
+            # Находим тэги с аттрибутами в которых может быть js
+            @code.gsub!(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
+                tag.gsub($3, JSCode.new($3.gsub(/\\-/ , '-')).replace(classes))
+            end
+            
+        end
+        
+    end
+    
+    class PlainCode < Code
+        
     end
 
 end
