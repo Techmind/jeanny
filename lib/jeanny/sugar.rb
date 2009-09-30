@@ -151,19 +151,20 @@ module Jeanny
                             break if exclude
                         end
                         
-                        # next if exclude
                         if exclude
                             puts file.yellow
                             next
                         end
                         
                         begin
+                            
+                            puts file.green
+
                             data = File.open_file file
                             data = @engine.replace data, type
 
                             File.save_file file, data
                             
-                            puts file.green
                         rescue Exception => e
                             puts e.message + "\n#{$@}"
                             exit 1

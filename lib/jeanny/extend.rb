@@ -174,6 +174,5 @@ end
 module Jeanny
     
     %w(FileNotFound CompareFileFormatError ClassesNotFound).each { |error| eval "class Jeanny#{error} < RuntimeError; end" }
-    # %w(CompareFileNotFound SaveError).each { |error| eval "class Jeanny#{error} < SystemCallError; end" }
     
 end

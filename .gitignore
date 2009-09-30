@@ -3,3 +3,4 @@ serp
 static
 test.css
 lib/jeanny/_engine.rb
+*.gem

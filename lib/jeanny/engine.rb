@@ -1,5 +1,7 @@
 
 module Jeanny
+    
+    require 'strscan'
 
     # Класс который выполнят всю основную работу. 
     # Парсит и заменяет классы, сохраняет и сравнивает их.    
@@ -209,24 +211,109 @@ module Jeanny
     class JSCode < Code
         
         def replace classes
-            
-            # Находим все строки и регулярные выражения
-            @code.gsub(/(("|'|\/)((\\\2|.)*?)\2)/m) do |string|
 
-                string_before, string_after = $3, $3
-
-                # Проходимся по всем классам
-                classes.each do |full_name, short_name|
-
-                    # И заменяем старый класс, на новый
-                    string_after = string_after.gsub(full_name, short_name)
+            data = []
+            each_string do |value, quote|
+                
+                next unless value.length > 4
+                
+                value_after = value.dup
+                classes.each do |full_class, short_class|
+                    while (pos = value_after =~ /#{full_class}(?=[^a-z0-9\-_]|$)/)
+                        value_after[pos, full_class.length] = short_class
+                    end
                 end
 
-                string.gsub(string_before, string_after.gsub(/(\\+)("|')/, "\\1\\1\\2"))
+                next if value.eql? value_after
+
+
+                data << [value, value_after]
 
             end
             
+            data.sort_by { |x| x[0].length }.reverse.each do |x|
+                while (pos = @code =~ /#{Regexp::escape(x[0])}(?=[^a-z0-9\-_]|$)/)
+                    @code[pos, x[0].length] = x[1]
+                end 
+            end
+            
+            @code
+            
         end
+        
+        def each_string
+            
+            @status = :in_code
+
+            @char, @last_char, @start_char, @value = '', '', '', ''
+            
+            scanner = StringScanner.new @code.dup
+
+            until scanner.eos?
+
+                scanner.getch or next
+                @char = scanner.matched
+
+                case @status
+
+
+                    when :in_code
+                        # Если мы в коде, а текущий символ один из тех что нам надо
+                        # значит запоминаем, этот символ и переходим в режим "в строке"
+                        if %w(" ').include? @char
+                            @start_char = @char
+                            @status = :in_string
+                        end
+
+                        # Если мы в коде, текущий символ слеш, а следующий не звездочка,
+                        # значит мы в регулярном выражении
+                        if @char.eql? '/' and @last_char =~ /=|\(|:/ and not %w(* /).include? scanner.post_match[0, 1]
+                            @start_char = @char
+                            @status = :in_regexp
+                        end
+
+                        # Если мы в коде, текущий символ звездочка, а предыдущий — слеш,
+                        # значит это начала комментария. Перехоим в режим "в комментарии"
+                        @status = :in_full_comment if @char.eql? '*' and @last_char.eql? '/'
+
+                        @status = :in_line_comment if @char.eql? '/' and @last_char.eql? '/'
+
+                    when :in_string, :in_regexp
+                        # Если мы в строке (или регулярке), текущий символ такой же как и начальный,
+                        # а предыдущий не экранирует его, значит строка законченна.
+                        # Переходим в режим "в коде"
+                        # if @char.eql? @start_char and scanner.pre_match !~ /[^\\]\\$/
+                        if @char.eql? @start_char and not @last_char.eql? '\\'
+                            if block_given?
+                                # yield "#{@start_char}#{@value}#{@start_char}", @value
+                                # yield @value
+                                yield @value, @start_char
+                            end
+
+                            @status, @start_char, @value = :in_code, '', ''
+                        # Иначе, прибавляем текущий символ к уже полученной строке
+                        else
+                            @value = @value + @char
+                        end
+
+                    when :in_full_comment
+                        # Если мы в комментарии, текущий символ слеш, а предыдущий
+                        # звездочка, значит комментарий закончился, переходим в режим "в коде"
+                        @status = :in_code if @char.eql? '/' and @last_char.eql? '*'
+
+                    when :in_line_comment
+                        @status = :in_code if @char.eql? "\n"
+
+                end
+
+                @last_char = @char unless @char.nil? or @char =~ /\s/
+
+            end
+        end
+        
+        private 
+
+        attr_accessor :status, :char, :last_char, :start_char, :value
         
     end
     
