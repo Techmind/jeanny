@@ -1,8 +1,7 @@
 #!/usr/bin/env ruby
 
-require 'lib/jeanny'
-# require 'rubygems'
-# require 'jeanny'
+require 'rubygems'
+require 'jeanny'
 
 include Jeanny::Sugar
 
