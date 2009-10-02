@@ -64,12 +64,13 @@ module Jeanny
         # Метод для замены классов
         def replace data, type
             
-            fail "Тип блока не понятный" unless [:js, :css, :html, :plain].include? type
+            fail "Тип блока не понятный" unless [:js, :css, :html, :tt2, :plain].include? type
             fail "nil Ololo" if data.nil?
             
             code = case type
                 when :js then JSCode
                 when :css then CSSCode
+                when :tt2 then TT2Template
                 when :html then HTMLCode
                 when :plain then PlainCode
             end
@@ -377,8 +378,8 @@ module Jeanny
             end
             
             # Находим аттрибуты с именем "class"
-            #   TODO: Надо находить не просто "class=blablabl", а искать
-            #         именно теги с аттрибутом "class"
+            # TODO: Надо находить не просто "class=blablabl", а искать
+            #       именно теги с аттрибутом "class"
             @code.gsub!(/class\s*=\s*('|")(.*?)\1/) do |match|
             
                 # берем то что в кавычках и разбиваем по пробелам
@@ -406,15 +407,98 @@ module Jeanny
                     "class=\"#{match.join(' ')}\""
                 else
                     ''
-                    # puts match
-                    # match
                 end
                 
             end
             
             # Находим тэги с аттрибутами в которых может быть js
-            @code.gsub(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
+            @code.gsub!(/<[^>]*?(onload|onunload|onclick|ondblclick|onmousedown|onmouseup|onmouseover|onmousemove|onmouseout|onfocus|onblur|onkeypress|onkeydown|onkeyup|onsubmit|onreset|onselect|onchange)\s*=\s*("|')((\\\2|.)*?)\2[^>]*?>/mi) do |tag|
                 tag.gsub($3, JSCode.new($3.gsub(/\\-/ , '-')).replace(classes))
+            end
+            
+            @code
+            
+        end
+        
+    end
+    
+    class TT2Template < HTMLCode
+        
+        def replace classes
+            
+            tags = []
+            @code.gsub! /\[%(.*?)%\]/ do |tag|
+                tags << tag
+                
+                " __tt2-tag__#{tags.length}__ "
+            end
+            
+            super classes
+            
+            tags.map! do |tag|
+                each_string :in => tag do |string|
+                    string_after = string.dup
+                    classes.each do |full_class, short_class|
+                        while (pos = string_after =~ /#{full_class}(?=[^a-z0-9\-_\.]|$)/)
+                            string_after[pos, full_class.length] = short_class
+                        end
+                    end 
+                    tag.gsub! string, string_after
+                end
+                tag
+            end
+            
+            tags.each_with_index do |tag, index|
+                @code.gsub!(/ __tt2-tag__#{index + 1}__ /, tag)
+            end
+
+            @code
+            
+        end
+        
+        private
+        
+        def each_string args = { }
+            
+            char        = ''
+            last_char   = ''
+            start_char  = ''
+            
+            value       = ''
+            status      = :in_code
+            scanner     = StringScanner.new args[:in] || ''
+
+            until scanner.eos?
+
+                scanner.getch or next
+                char = scanner.matched
+
+                case status
+                    
+                    when :in_code
+                        # Если мы в коде, а текущий символ один из тех что нам надо
+                        # значит запоминаем, этот символ и переходим в режим "в строке"
+                        if %w(" ').include? char
+                            start_char = char
+                            status = :in_string
+                        end
+                        
+                    when :in_string
+                        # Если мы в строке, текущий символ такой же как и начальный,
+                        # а предыдущий не экранирует его, значит строка законченна.
+                        # Переходим в режим "в коде"
+                        if char.eql? start_char and not last_char.eql? '\\'
+                            yield value if block_given?
+                            status, start_char, value = :in_code, '', ''
+                        # Иначе, прибавляем текущий символ к уже полученной строке
+                        else
+                            value = value + char
+                        end
+                    
+                end
+                
+                last_char = char unless char.nil? or char =~ /\s/
+
             end
             
         end
