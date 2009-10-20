@@ -163,7 +163,7 @@ module Jeanny
                             data = File.open_file file
                             data = @engine.replace data, type
 
-                            File.save_file file, data
+                            File.save_file file, data, replace[:prefix]
                             
                         rescue Exception => e
                             puts e.message + "\n#{$@}"

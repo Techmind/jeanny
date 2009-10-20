@@ -32,7 +32,7 @@ class File
         # Метод для сохранения файла
         def self.save_file file, data, prefix = ''
             # Если префикс не пустой, добавляем его к имени файла
-            file = "#{dirname(expand_path(file))}/#{prefix}#{basename(file)}" unless prefix.empty?
+            file = "#{dirname(expand_path(file))}/#{prefix}#{basename(file)}" unless prefix.nil? or prefix.empty?
             # Открываем файл
             open(file, 'w') do |file|
                 # Помещаем данные

@@ -1,7 +1,7 @@
 spec = Gem::Specification.new do |gem|
     
     gem.name            = 'jeanny'
-    gem.version         = '0.85'
+    gem.version         = '0.87'
     gem.summary         = 'Lib for obfuscation css class names'
     # gem.description     = 'Lib for obfuscation css class names'
     gem.files           = ['README', 'lib/jeanny.rb', 'lib/jeanny/engine.rb', 'lib/jeanny/sugar.rb', 'lib/jeanny/extend.rb']
