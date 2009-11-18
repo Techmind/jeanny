@@ -85,6 +85,7 @@ module Jeanny
 
         # Метод генерирует и возращает массив коротких имен.
         # По умолчанию генерируется 38471 имя. Если надо больше, добавить — легко        
+        # UPD: Уже меньше, так как классы которые начинаются на "ad" не используются
         def generate_short_words again = false
 
             short_words = []
@@ -92,7 +93,7 @@ module Jeanny
             %w(a aa a0 a_ a- aaa a00 a0a aa0 aa_ a_a aa- a-a a0_ a0- a_0 a-0).each do |name|
                 max = name.length + 1
                 while name.length < max
-                    short_words << name
+                    short_words << name unless name =~ /^ad/
                     name = name.next
                 end
             end
