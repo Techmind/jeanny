@@ -5,3 +5,7 @@ test.css
 lib/jeanny/_engine.rb
 *.gem
 classes.saved
+classes.tt2
+Makefile
+test.rb
+css
