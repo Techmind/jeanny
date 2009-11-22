@@ -221,8 +221,15 @@ module Jeanny
                 
                 value_after = value.dup
                 classes.each do |full_class, short_class|
-                    while (pos = value_after =~ /#{full_class}(?=[^a-z0-9\-_]|$)/)
-                        value_after[pos, full_class.length] = short_class
+                    #while (pos = value_after =~ /#{full_class}(?=[^a-z0-9\-_]|$)/)
+                        #value_after[pos, full_class.length] = short_class
+                    #end
+                    while (pos = value_after =~ /([^#]|^)#{full_class}(?=[^a-z0-9\-_]|$)/)
+                        if $1.nil? or $1.empty?
+                            value_after[pos, full_class.length] = short_class
+                        else
+                            value_after[pos + 1, full_class.length] = short_class
+                        end
                     end
                 end
 

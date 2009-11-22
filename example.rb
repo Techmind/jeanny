@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
-# require 'rubygems'
-# require 'jeanny'
+#require 'rubygems'
+#require 'jeanny'
 require 'lib/jeanny'
 
 include Jeanny::Sugar
@@ -13,7 +13,7 @@ group :css, :title => 'replacing in stylesheets' do
 end
 
 group :js, :title => 'replacing in scripts' do
-    replace :in => 'serp/js/_serp.js', :prefix => '_'
+    replace :in => 'serp/js/_search.js', :prefix => '_'
     replace :in => 'serp/block/**/*.js'
 end
 
