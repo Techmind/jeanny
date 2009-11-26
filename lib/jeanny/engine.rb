@@ -436,28 +436,35 @@ module Jeanny
             
             tags = []
             @code.gsub! /\[%(.*?)%\]/ do |tag|
-                tags << tag
+                tags << $1
                 
-                " __tt2-tag__#{tags.length}__ "
+                "__tt2-tag__#{tags.length}__"
             end
-            
+
             super classes
             
             tags.map! do |tag|
-                each_string :in => tag do |string|
-                    string_after = string.dup
-                    classes.each do |full_class, short_class|
-                        while (pos = string_after =~ /#{full_class}(?=[^a-z0-9\-_\.]|$)/)
-                            string_after[pos, full_class.length] = short_class
+
+                # Пропускаем конструкции в которых точно ничего нет
+                unless tag =~ /^\s*(#|PROCESS|INCLUDE|INSERT|END\s*$|ELSE\s*$)/im
+                    each_string :in => tag do |string|
+                        unless string =~ /\.(tt2|css|png|jpg|gif)\s*$/
+                            string_after = string.dup
+                            classes.each do |full_class, short_class|
+                                while (pos = string_after =~ /#{full_class}(?=[^a-z0-9\-_\.]|$)/)
+                                    string_after[pos, full_class.length] = short_class
+                                end
+                            end 
+                            tag.gsub! string, string_after
                         end
-                    end 
-                    tag.gsub! string, string_after
+                        tag
+                    end
                 end
                 tag
             end
-            
+
             tags.each_with_index do |tag, index|
-                @code.gsub!(/ __tt2-tag__#{index + 1}__ /, tag)
+                @code.gsub!(/__tt2-tag__#{index + 1}__/, "[%#{tag}%]")
             end
 
             @code
