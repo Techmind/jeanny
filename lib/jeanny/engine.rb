@@ -446,9 +446,9 @@ module Jeanny
             tags.map! do |tag|
 
                 # Пропускаем конструкции в которых точно ничего нет
-                unless tag =~ /^\s*(#|PROCESS|INCLUDE|INSERT|END\s*$|ELSE\s*$)/im
+                unless tag =~ /^\s*(#|BLOCK|PROCESS|INCLUDE|INSERT|END\s*$|ELSE\s*$)/im
                     each_string :in => tag do |string|
-                        unless string =~ /\.(tt2|css|png|jpg|gif)\s*$/
+                        unless string =~ /\.(tt2|css|js|png|jpg|gif)\s*$/
                             string_after = string.dup
                             classes.each do |full_class, short_class|
                                 while (pos = string_after =~ /#{full_class}(?=[^a-z0-9\-_\.]|$)/)
