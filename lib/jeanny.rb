@@ -17,4 +17,3 @@ end
 
 require 'jeanny/extend'
 require 'jeanny/engine'
-require 'jeanny/sugar'
