@@ -330,17 +330,11 @@ module Jeanny
         
         def replace classes
             
-            # Вырезаем экспрешены
-            expression_list = []
-            @code.replace_expressions! do |expression|
-                # и заменяем в них классы как в js
-                expression_list << JSCode.new(expression).replace(classes)
-                "_ololo_#{expression_list.length}_ololo_"
-            end
-            
-            # Вставляем экспрешены с замененными классами обратно
-            expression_list.each_with_index do |expression, index|
-                @code.gsub! /_ololo_#{index + 1}_ololo_/, expression
+            # Заменяем в экспрешенах
+            @code.each_expression do |expression|
+                @code.gsub! expression do |a|
+                    JSCode.new(expression).replace(classes)
+                end
             end
             
             @code.gsub!(/\[class\^=(.*?)\]/) do |class_name|
