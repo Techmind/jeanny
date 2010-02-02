@@ -455,7 +455,7 @@ module Jeanny
                                     string_after[pos, full_class.length] = short_class
                                 end
                             end 
-                            tag.gsub! string, string_after
+                            tag = tag.sub string, string_after
                         end
                         tag
                     end
@@ -481,7 +481,7 @@ module Jeanny
             
             value       = ''
             status      = :in_code
-            scanner     = StringScanner.new args[:in] || ''
+            scanner     = StringScanner.new args[:in].dup || ''
 
             until scanner.eos?
 
