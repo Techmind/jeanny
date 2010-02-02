@@ -433,88 +433,33 @@ module Jeanny
     class TT2Template < HTMLCode
         
         def replace classes
-            
-            tags = []
-            @code.gsub! /\[%(.*?)%\]/ do |tag|
-                tags << $1
-                
-                "__tt2-tag__#{tags.length}__"
+
+            tags = Array.new
+            mark = self.object_id
+
+            @code.gsub! /\[%(.*?)%\]/m do |tag|
+                tags.push tag and "#{mark}:#{tags.length - 1}:"
             end
 
             super classes
-            
-            tags.map! do |tag|
 
-                # Пропускаем конструкции в которых точно ничего нет
-                unless tag =~ /^\s*(#|BLOCK|PROCESS|INCLUDE|INSERT|END\s*$|ELSE\s*$)/im
-                    each_string :in => tag do |string|
-                        unless string =~ /\.(tt2|css|js|png|jpg|gif)\s*$/
-                            string_after = string.dup
-                            classes.each do |full_class, short_class|
-                                while (pos = string_after =~ /#{full_class}(?=[^a-z0-9\-_\.]|$)/)
-                                    string_after[pos, full_class.length] = short_class
-                                end
-                            end 
-                            tag.gsub! string, string_after
+            classes.each do |full_class, short_class|
+                tags.map! do |tag|
+                    tag.gsub /((BLOCK|PROCESS|INCLUDE|INSERT)\s+('|").*?[^\\]\3)|(('|").*?[^\\]\5)/ do |string|
+                        unless $5.nil?
+                            string.gsub /#{full_class}(?=[\s"']|$|\\["'])/, short_class
+                        else
+                            string
                         end
-                        tag
                     end
                 end
-                tag
             end
 
-            tags.each_with_index do |tag, index|
-                @code.gsub!(/__tt2-tag__#{index + 1}__/, "[%#{tag}%]")
+            tags.select.with_index do |tag, index|
+                @code.gsub! "#{mark}:#{index}:", tag
             end
 
             @code
-            
-        end
-        
-        private
-        
-        def each_string args = { }
-            
-            char        = ''
-            last_char   = ''
-            start_char  = ''
-            
-            value       = ''
-            status      = :in_code
-            scanner     = StringScanner.new args[:in] || ''
-
-            until scanner.eos?
-
-                scanner.getch or next
-                char = scanner.matched
-
-                case status
-                    
-                    when :in_code
-                        # Если мы в коде, а текущий символ один из тех что нам надо
-                        # значит запоминаем, этот символ и переходим в режим "в строке"
-                        if %w(" ').include? char
-                            start_char = char
-                            status = :in_string
-                        end
-                        
-                    when :in_string
-                        # Если мы в строке, текущий символ такой же как и начальный,
-                        # а предыдущий не экранирует его, значит строка законченна.
-                        # Переходим в режим "в коде"
-                        if char.eql? start_char and not last_char.eql? '\\'
-                            yield value if block_given?
-                            status, start_char, value = :in_code, '', ''
-                        # Иначе, прибавляем текущий символ к уже полученной строке
-                        else
-                            value = value + char
-                        end
-                    
-                end
-                
-                last_char = char unless char.nil? or char =~ /\s/
-
-            end
             
         end
         
