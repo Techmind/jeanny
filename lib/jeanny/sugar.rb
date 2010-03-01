@@ -58,7 +58,6 @@ module Jeanny
                     saved_classes.map! do |x|
                         x.to_a.flatten
                     end
-                    p saved_classes
                 rescue Exception => e
                     $stderr.puts e.message
                     exit 1                    
