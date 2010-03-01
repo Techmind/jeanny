@@ -1,4 +1,5 @@
 require 'singleton'
+require 'yaml'
 
 module Jeanny
 
@@ -53,44 +54,15 @@ module Jeanny
                 saved_classes = []
                 
                 begin
-                    meat = File.open File.expand_path(@compare_file)
-                    meat.read.gsub(/\s+|\'/, '').gsub(/^.*\{|\}.*$/, '').split(',').each do |item|
-                        item = item.split('=>').delete_if { |x| x.nil? or x.empty? }
-                        if item.length.eql? 2
-                            saved_classes << [item[0], item[1]]
-                        else
-                            fail JeannyCompareFileFormatError, "Какая то ерунда с одим (а может больше) классом. Можно пропустить, но хрен его знает что дальше будет…\n" + "файл: #{file}, строка: #{index}\n#{raw_data[index]}".red 
-                        end
+                    saved_classes = YAML.load_file @compare_file
+                    saved_classes.map! do |x|
+                        x.to_a.flatten
                     end
-                    
-                    # p saved_classes
-                    
+                    p saved_classes
                 rescue Exception => e
                     $stderr.puts e.message
                     exit 1                    
                 end
-                
-                # begin
-                #     # Открываем файл
-                #     raw_file = File.open_file @compare_file
-                #     raw_data = raw_file.split "\n"
-                #         
-                #     # ... и читаем структиуру
-                #     raw_data.map do |line|
-                #         line.split(':').map do |hash|
-                #             hash.strip
-                #         end
-                #     end.each_with_index do |item, index|
-                #         if item.length != 2 or item[1].empty?
-                #             fail JeannyCompareFileFormatError, "Какая то ерунда с одим (а может больше) классом. Можно пропустить, но хрен его знает что дальше будет…\n" + "файл: #{file}, строка: #{index}\n#{raw_data[index]}".red 
-                #         else
-                #             saved_classes << [item[0], item[1]]
-                #         end
-                #     end
-                # rescue Exception => e
-                #     $stderr.puts e.message
-                #     exit 1
-                # end
                 
                 # Сравниваем
                 new_classes = @engine.compare_with saved_classes
@@ -108,27 +80,12 @@ module Jeanny
 
             def save file = ''
                 
-                fail RuntimeError, 'на данном этапе нельзя вызывать сохранение классов' unless canbe[:save]
+                fail RuntimeError, 'на данном этапе нельзя вызывать сохранение классов' unless @canbe[:save]
 
                 file = file.empty? ? @compare_file : file
-                temp = <<CODE
-[%
-    classes = 
-                {
-%classes%
-                }
-%]            
-CODE
-                
-                File.open(File.expand_path(file), 'w') do |f|
 
-                    classes = []
-                    @engine.classes.each do |key, val|
-                        classes << " " * 20 + "'#{key}'" + " => '#{val}'".rjust(50 - key.length)
-                    end
-                    
-                    f.puts temp.gsub /%classes%/, classes.join(",\n")
-
+                open(file, 'w') do |f|
+                    f.puts @engine.classes.to_yaml
                 end unless file.nil? or file.empty?
 
             end

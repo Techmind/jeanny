@@ -1,7 +1,5 @@
 #!/usr/bin/env ruby
 
-#require 'rubygems'
-#require 'jeanny'
 require 'lib/jeanny'
 
 include Jeanny::Sugar
@@ -21,12 +19,12 @@ include Jeanny::Sugar
     #replace :in => 'serp/static/*.html'
 #end
 
-analyze %w(serp/css/_*.css serp/block/**/*.css)
+analyze %w(_search.css) and save 'hello.yaml'
 
 group :tt2 do
 
     #replace :in => 'serp/tt2/report.tt2'
     #replace :in => 'serp/tt2/snippets/full/video.tt2'
-    replace :in => 'serp/tt2/**/*.tt2', :exclude => /^.+\/_[^\/]+$/, :prefix => "_"
+    #replace :in => 'serp/tt2/**/*.tt2', :exclude => /^.+\/_[^\/]+$/, :prefix => "_"
 
 end

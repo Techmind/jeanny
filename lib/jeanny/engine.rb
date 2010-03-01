@@ -194,6 +194,14 @@ module Jeanny
             @keys.map { |x| [x, @values[@keys.index(x)]] }
         end
 
+        def to_yaml
+            yaml = []
+            each do |key, val|
+                yaml.push({ key => val })
+            end
+            yaml.to_yaml
+        end
+
     end
     
     class Code
