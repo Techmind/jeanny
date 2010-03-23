@@ -226,32 +226,26 @@ module Jeanny
             each_string do |value, quote|
                 
                 next unless value.length > 4
+                meat = value.dup
                 
-                value_after = value.dup
                 classes.each do |full_class, short_class|
-                    #while (pos = value_after =~ /#{full_class}(?=[^a-z0-9\-_]|$)/)
-                        #value_after[pos, full_class.length] = short_class
-                    #end
-                    while (pos = value_after =~ /([^#]|^)#{full_class}(?=[^a-z0-9\-_]|$)/)
-                        if $1.nil? or $1.empty?
-                            value_after[pos, full_class.length] = short_class
+                    while pos = meat =~ /([^#]|^)#{full_class}(?=[^a-z0-9\-_\.\/]|$)/i
+                       if $1.nil? or $1.empty?
+                            meat[pos, full_class.length] = short_class
                         else
-                            value_after[pos + 1, full_class.length] = short_class
+                            meat[pos + 1, full_class.length] = short_class
                         end
                     end
                 end
 
-                next if value.eql? value_after
-
-
-                data << [value, value_after]
+                unless meat.eql? value
+                    data.push [ "#{quote}#{value}#{quote}", "#{quote}#{meat}#{quote}" ]
+                end
 
             end
-            
-            data.sort_by { |x| x[0].length }.reverse.each do |x|
-                while (pos = @code =~ /#{Regexp::escape(x[0])}(?=[^a-z0-9\-_]|$)/)
-                    @code[pos, x[0].length] = x[1]
-                end 
+
+            data.each do |string|
+                @code.gsub! /#{string.first}/, string.last
             end
             
             @code
