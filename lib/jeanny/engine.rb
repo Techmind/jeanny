@@ -14,24 +14,38 @@ module Jeanny
         end
 
         # Метод ищет имена классов, в переданном ему тексте
-        def analyze file_meat
+        def analyze file_meat, excludes
             
             fail TypeError, "передан неверный аргумент (Jeanny::Engine.analyze)" if file_meat.empty?
 
             # Удаляем все экспрешены и удаляем все что в простых и фигурных скобках
-            file_meat = file_meat.remove_expressions.gsub(/\{.*?\}/m , '{}').gsub(/\(.*?\)/, '()')
+            file_meat = file_meat.remove_expressions.gsub(/\{.*?\}/m , '{}').gsub(/\(.*?\)/, '()').gsub(/@import\s*'[^']*';/, '').gsub(/\/\*.*?\*\//m, '')
+
 
             short_words = generate_short_words
 
             # Находим имена классов
             file_meat.gsub(/\.([^\.,\{\} :#\[\]\*\n\s\/]+)/) do |match|
+                # игнорируем короткие классы
+                next if $1.length <= 4
+                # если есть исключения(например названия классов как ключевые слова в html/js)
+                exclude = nil
+                excludes.each do |exclude_rule|
+                    if exclude_rule.kind_of? Regexp
+                        exclude = $1 =~ exclude_rule
+                    end
+                    break if exclude
+                end
+			
                 # Если найденная строка соответствует маске и класс еще не был добавлен — добавляем его
-                @classes[$1] = short_words.shift if match =~ /^\.([a-z]-.+)$/ and not(@classes.include? $1 ) 
+   	            @classes[$1] = short_words.shift if match =~ /^\.([a-zA-Z\-_].+)$/ and not(@classes.include? $1 ) and not (exclude)
+
             end
 
             fail JeannyClassesNotFound, "похоже, что в анализируемом файле нет классов подходящих по условию" if @classes.empty?
-            
-            # @classes.sort!
+			
+            #@classes.sort!
+			
             @classes
 
         end
@@ -64,13 +78,14 @@ module Jeanny
         # Метод для замены классов
         def replace data, type
             
-            fail "Тип блока не понятный" unless [:js, :css, :html, :tt2, :plain].include? type
+            fail "Тип блока не понятный" unless [:js, :css, :html, :tt2, :plain, :tpl].include? type
             fail "nil Ololo" if data.nil?
             
             code = case type
                 when :js then JSCode
                 when :css then CSSCode
                 when :tt2 then TT2Template
+				when :tpl then TplCode
                 when :html then HTMLCode
                 when :plain then PlainCode
             end
@@ -93,7 +108,7 @@ module Jeanny
             %w(a aa a0 a_ a- aaa a00 a0a aa0 aa_ a_a aa- a-a a0_ a0- a_0 a-0).each do |name|
                 max = name.length + 1
                 while name.length < max
-                    short_words << name unless name =~ /^ad/
+                    short_words << name unless name =~ /^(?:ad|js)/
                     name = name.next
                 end
             end
@@ -245,7 +260,13 @@ module Jeanny
             end
 
             data.each do |string|
-                @code.gsub! /#{string.first}/, string.last
+                # ruby regexp string substitution (regexp-fix), if string has symbol \ it will be used as escape symbol, so replace \ with \\ in string for using in regexp
+                # read http://redmine.ruby-lang.org/issues/show/1251 for more info.
+                if (string.first =~ /\\/ && "\\".gsub("\\", "\\\\") == "\\" )
+                    string.last.gsub! "\\" , "\\\\\\\\"					
+                end
+
+                @code.gsub! string.first, string.last
             end
             
             @code
@@ -455,6 +476,52 @@ module Jeanny
                 @code.gsub! "#{mark}:#{index}:", tag
             end
 
+            @code
+            
+        end
+        
+    end
+
+    # смарти-шаблоны без инлавйновых элементов	
+	class TplCode < Code
+        
+        def replace classes
+            
+            # Заменяем классы во встроенных стилях
+            @code.gsub!(/<style[^>]*?>(.*?)<\s*\/\s*style\s*>/mi) do |style|
+                style.gsub($1, CSSCode.new($1).replace(classes))
+            end
+
+            # Заменяем классы во встроенных скриптах
+            @code.gsub!(/<script[^>]*?>(.*?)<\s*\/\s*script\s*>/mi) do |script|
+                script.gsub($1, JSCode.new($1).replace(classes))
+            end
+            
+            # Находим аттрибуты с именем "class"
+            # TODO: Надо находить не просто "class=blablabl", а искать
+            #       именно теги с аттрибутом "class"
+            @code.gsub!(/class\s*=\s*('|")(.*?)\1/) do |match|            
+                # берем то что в кавычках и разбиваем по пробелам
+				class_name_html = $2
+				
+                matches = class_name_html.split(/[\s\{\}]/)
+                
+                # проходимся по получившемуся массиву
+                matches.map! do |class_name|                    					
+                    # удаляем проблелы по бокам
+                    class_name = class_name.strip
+                    
+                    # и если в нашем списке замены есть такой класс заменяем на новое значение
+                    if classes.has_key? class_name					
+                        class_name_html.gsub!(/([^a-zA-Z\-\_]|^)#{class_name}(?![a-zA-Z\-\_])/, '\\1' + classes[class_name])
+                    else
+                        class_name
+                    end                    
+                end.delete_if { |class_name| class_name.nil? or class_name.empty? }
+				
+                'class="' + class_name_html + '"'
+            end            
+            
             @code
             
         end

@@ -1,5 +1,6 @@
 require 'singleton'
 require 'yaml'
+require 'ftools'
 
 module Jeanny
 
@@ -21,15 +22,17 @@ module Jeanny
                 begin
                     
                     file_list = File.list path
-                    
+					                  
                     fail JeannyFileNotFound, "файлы для анализа не найдены (Jeanny::Engine.analyze)" if file_list.empty?
-                    
+					
+                    args[:excludes] = args[:excludes] | []
+					                    
                     file_meat = ''
                     file_list.each do |file|
                         file_meat = file_meat + File.open_file(file)
                     end
                     
-                    if @engine.analyze file_meat
+                    if @engine.analyze(file_meat, args[:excludes])
                         @canbe[:save], @canbe[:process] = true, true
                         @canbe[:analyze] = false
                     end
@@ -127,7 +130,7 @@ module Jeanny
                             puts file.red
                             next
                         end
-                        
+						                        
                         exclude = false
                         replace[:ex].each do |exclude_rule|
                             if exclude_rule.kind_of? Regexp
@@ -149,9 +152,17 @@ module Jeanny
 
                             data = File.open_file file
                             data = @engine.replace data, type
-
-                            File.save_file file, data, replace[:prefix]
-                            
+							
+                            if replace[:match].nil? || replace[:replace].nil?
+                               File.save_file file, data, replace[:prefix]								
+                            else
+                                # заменить начало строки на соответствующее положение								
+                                new_name = file.gsub(replace[:match], replace[:replace])
+                                dirname = File.dirname(new_name)
+                                File.makedirs dirname
+								
+                                File.save_file new_name, data, replace[:prefix]
+                            end                            
                         rescue Exception => e
                             puts e.message + "\n#{$@}"
                             exit 1
@@ -165,11 +176,13 @@ module Jeanny
             def replace args = { }
                 
                 fail "We can`t replace here..." unless @canbe[:replace]
-                
+				
                 struct = { :in => [], :ex => [], :prefix => '' }
 
                 struct[:in] = ([args[:in]] | [args[:include]]).flatten.delete_if { |item| item.nil? or item.empty? }
                 struct[:ex] = ([args[:ex]] | [args[:exclude]]).flatten.delete_if { |item| item.nil? or item.empty? }
+                struct[:replace] = args[:replace]
+                struct[:match] = args[:match]
 
                 struct[:prefix] = args[:prefix] unless args[:prefix].nil?
 
