@@ -236,7 +236,7 @@ module Jeanny
     class JSCode < Code
         
         def replace classes
-
+		
             data = []
             each_string do |value, quote|
                 
@@ -244,7 +244,7 @@ module Jeanny
                 meat = value.dup
                 
                 classes.each do |full_class, short_class|
-                    while pos = meat =~ /([^#]|^)#{full_class}(?=[^a-z0-9\-_\.\/]|$)/i
+                    while pos = meat =~ /([^#a-z0-9\-_\/]|^)#{full_class}(?=[^a-z0-9\-_\.\/]|$)/i
                        if $1.nil? or $1.empty?
                             meat[pos, full_class.length] = short_class
                         else
@@ -259,7 +259,7 @@ module Jeanny
 
             end
 
-            data.each do |string|
+            data.each do |string|		
                 # ruby regexp string substitution (regexp-fix), if string has symbol \ it will be used as escape symbol, so replace \ with \\ in string for using in regexp
                 # read http://redmine.ruby-lang.org/issues/show/1251 for more info.
                 if (string.first =~ /\\/ && "\\".gsub("\\", "\\\\") == "\\" )

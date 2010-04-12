@@ -4,7 +4,12 @@ require 'lib/jeanny'
 
 include Jeanny::Sugar
 
-app_path = '/WebServers/home/frontlawgui.localhost/www/';
+if RUBY_PLATFORM == 'linux'
+	app_path = '/apps/flg/';
+else
+	app_path = 'C:/WebServers/home/frontlawgui.localhost/www/';
+end
+
 app_path_tpl = app_path + 'tpl/';
 app_path_js = app_path + 'static/js/';
 
@@ -25,24 +30,27 @@ template_dirs = [
 	app_path_tpl + '*/*/*/*.tpl',
 ]
 
-start_match = /^(\/|[a-zA-Z]\:\/)/
-to_tmp = '\1tmp/'
+start_match_css = /^(\/|[a-zA-Z]\:\/).*\/(css)/
+start_match_tpl = /^(\/|[a-zA-Z]\:\/).*\/(tpl)/
+start_match_js  = /^(\/|[a-zA-Z]\:\/).*\/(js)/
+to_tmp = '\1tmp/jeanny_processed/\2/'
+
+to_processed = app_path + 'cache/processed_tpl/'
 
 key_words_regexp = [/^(first|last|button|input|object|select|textarea|number|selected|value|border|hover|label|title|center|right|toggle|clear|submit|active|search|disabled|enabled|loader)/]
 
-# [TODO] add load from file
 analyze(css_dirs, :compare_with => 'css.yaml', :excludes => key_words_regexp) and save 'css.yaml'
 
 group :css, :title => 'replacing in stylesheets' do
-     replace :include => css_dirs, :match => start_match, :replace => to_tmp
+     replace :include => css_dirs, :match => start_match_css, :replace => to_tmp
 end
 
 group :js, :title => 'replacing in scripts' do    
-    replace :in => js_dirs, :match => start_match, :replace => to_tmp, :exclude => [/sproutcore/, /\.min/, /\jquery-1.4.2/, /\.compliled/]
+    replace :in => js_dirs, :match => start_match_js, :replace => to_tmp, :exclude => [/sproutcore/, /\.min/, /\jquery-1.4.2/, /\.compliled/]
 end
 
 group :tpl, :title => 'replacing in template files' do
-    replace :in => template_dirs, :match => start_match, :replace => to_tmp
+    replace :in => template_dirs, :match => start_match_tpl, :replace => to_processed
 end
 
 #group :tt2 do
